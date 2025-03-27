@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-section:hover {
+            border-color: #666;
+            background-color: #f9f9f9;
+        }
+        .upload-section.dragover {
+            border-color: #4CAF50;
+            background-color: #e8f5e9;
+        }
+        #fileInput {
+            display: none;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background-color: #2196F3;
+        }
+        .btn-secondary:hover {
+            background-color: #0b7dda;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .status-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .status-error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .status-processing {
+            background-color: #d9edf7;
+            color: #31708f;
+        }
+        .download-section, .preview-section {
+            margin-top: 20px;
+            display: none;
+        }
+        .download-section h2, .preview-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .download-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .download-link {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+        .download-link:hover {
+            background-color: #e9ecef;
+        }
+        .download-all-btn {
+            background-color: #007bff;
+            margin-top: 15px;
+            display: block;
+            width: 100%;
+        }
+        .download-all-btn:hover {
+            background-color: #0069d9;
+        }
+        .buttons-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .image-preview {
+            max-width: 100%;
+            margin: 20px 0;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .processing-options {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Processing App</h1>
+        <div class="upload-section" id="dropZone">
+            <input type="file" id="fileInput" accept="image/*">
+            <p>Drag and drop an image here or click to select</p>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="preview-section" id="previewSection">
+            <h2>Your Image</h2>
+            <img id="imagePreview" class="image-preview">
+            <div class="buttons-container">
+                <button class="btn" id="processBtn">Convert to Spatial (HEVC)</button>
+                <button class="btn btn-secondary" id="outpaintBtn">Outpaint Image</button>
+            </div>
+        </div>
+        
+        <div class="preview-section" id="outpaintPreviewSection">
+            <h2>Expanded Image</h2>
+            <img id="outpaintPreview" class="image-preview">
+            <div class="buttons-container">
+                <button class="btn" id="convertToHevcBtn">Convert to Spatial (HEVC)</button>
+            </div>
+        </div>
+        
+        <div class="download-section" id="downloadSection">
+            <h2>Processed Files</h2>
+            <div class="download-links" id="downloadLinks"></div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const outpaintPreview = document.getElementById('outpaintPreview');
+        const processBtn = document.getElementById('processBtn');
+        const outpaintBtn = document.getElementById('outpaintBtn');
+        const convertToHevcBtn = document.getElementById('convertToHevcBtn');
+        const status = document.getElementById('status');
+        const previewSection = document.getElementById('previewSection');
+        const outpaintPreviewSection = document.getElementById('outpaintPreviewSection');
+        const downloadSection = document.getElementById('downloadSection');
+        const downloadLinks = document.getElementById('downloadLinks');
+
+        let selectedFile = null;
+        let outpaintedImage = null;
+        let isProcessing = false;
+
+        // Set the base URL with port for all API calls
+        const API_BASE_URL = window.location.origin;
+
+        // Handle file selection
+        dropZone.addEventListener('click', (e) => {
+            if (!isProcessing) {
+                fileInput.click();
+            }
+        });
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // Handle drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!isProcessing) {
+                dropZone.classList.add('dragover');
+            }
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (!isProcessing) {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    handleFileSelect();
+                }
+            }
+        });
+
+        function handleFileSelect() {
+            if (fileInput.files.length > 0) {
+                selectedFile = fileInput.files[0];
+                
+                // Show image preview
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    previewSection.style.display = 'block';
+                    
+                    // Hide outpaint preview when new image is selected
+                    outpaintPreviewSection.style.display = 'none';
+                    downloadSection.style.display = 'none';
+                };
+                reader.readAsDataURL(selectedFile);
+                
+                showStatus('Image selected: ' + selectedFile.name, 'success');
+            }
+        }
+
+        // Process 3D Image
+        processBtn.addEventListener('click', async () => {
+            if (!selectedFile || isProcessing) return;
+            await processImage(selectedFile);
+        });
+
+        // Outpaint Image
+        outpaintBtn.addEventListener('click', async () => {
+            if (!selectedFile || isProcessing) return;
+            await outpaintImage(selectedFile);
+        });
+
+        // Convert outpainted image to 3D
+        convertToHevcBtn.addEventListener('click', async () => {
+            if (!outpaintedImage || isProcessing) return;
+            await processImage(outpaintedImage);
+        });
+
+        async function outpaintImage(file) {
+            try {
+                isProcessing = true;
+                showStatus('Outpainting image...', 'processing');
+                disableButtons();
+
+                console.log("Creating form data for outpainting with file:", file.name);
+                const formData = new FormData();
+                formData.append('file', file);
+
+                console.log("Sending outpaint request to:", API_BASE_URL + '/outpaint/');
+                const response = await fetch(API_BASE_URL + '/outpaint/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log("Outpaint response status:", response.status);
+
+                let data;
+                try {
+                    data = await response.json();
+                    console.log("Outpaint response data:", data);
+                } catch (jsonError) {
+                    // Handle cases where the response is not JSON
+                    const text = await response.text();
+                    console.error("Non-JSON response:", text);
+                    throw new Error(`Server error (${response.status}): ${text.substring(0, 150)}...`);
+                }
+
+                if (response.ok) {
+                    showStatus('Image outpainted successfully!', 'success');
+                    
+                    try {
+                        // Show outpainted image preview
+                        console.log("Fetching outpainted image from:", data.outpaint_path);
+                        outpaintedImage = await fetchOutpaintedImage(data.outpaint_path);
+                        outpaintPreview.src = URL.createObjectURL(outpaintedImage);
+                        outpaintPreviewSection.style.display = 'block';
+                    } catch (previewError) {
+                        showStatus(`Image outpainted but preview failed: ${previewError.message}`, 'error');
+                        console.error('Preview error:', previewError);
+                    }
+                } else {
+                    throw new Error(data.detail || 'Outpainting failed');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+                console.error('Outpainting error:', error);
+            } finally {
+                isProcessing = false;
+                enableButtons();
+            }
+        }
+
+        async function fetchOutpaintedImage(path) {
+            try {
+                const url = `${API_BASE_URL}/download/${path}`;
+                console.log("Fetching image from:", url);
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+                }
+                
+                const blob = await response.blob();
+                // Create a File object with proper name to use later
+                // Ensure we're using PNG format for 3D processing
+                const fileName = path.split('/').pop();
+                // Force PNG mime type for consistency with 3D processing
+                return new File([blob], fileName, { type: 'image/png' });
+            } catch (error) {
+                console.error('Error fetching outpainted image:', error);
+                throw error;
+            }
+        }
+
+        async function processImage(file) {
+            try {
+                isProcessing = true;
+                showStatus('Processing 3D image...', 'processing');
+                disableButtons();
+
+                console.log("Processing 3D image with file:", file.name);
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(API_BASE_URL + '/upload/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                } catch (jsonError) {
+                    // Handle cases where the response is not JSON
+                    const text = await response.text();
+                    throw new Error(`Server error (${response.status}): ${text.substring(0, 150)}...`);
+                }
+
+                if (response.ok) {
+                    showStatus('Image processed successfully!', 'success');
+                    showDownloadLinks(data.files, data.output_directory);
+                } else {
+                    throw new Error(data.detail || 'Processing failed');
+                }
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+                console.error('Processing error:', error);
+            } finally {
+                isProcessing = false;
+                enableButtons();
+            }
+        }
+
+        function disableButtons() {
+            processBtn.disabled = true;
+            outpaintBtn.disabled = true;
+            convertToHevcBtn.disabled = true;
+            dropZone.style.pointerEvents = 'none';
+        }
+
+        function enableButtons() {
+            processBtn.disabled = false;
+            outpaintBtn.disabled = false;
+            convertToHevcBtn.disabled = false;
+            dropZone.style.pointerEvents = 'auto';
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = 'status-' + type;
+            status.style.display = 'block';
+        }
+
+        function showDownloadLinks(files, directory) {
+            downloadSection.style.display = 'block';
+            downloadLinks.innerHTML = '';
+
+            // Add individual file download links
+            for (const [name, path] of Object.entries(files)) {
+                const displayName = name.replace(/_/g, ' ');
+                
+                const link = document.createElement('a');
+                link.href = `${API_BASE_URL}/download/${path}`;
+                link.className = 'download-link';
+                link.textContent = `Download ${displayName}`;
+                downloadLinks.appendChild(link);
+            }
+            
+            // Add Download All button
+            const allBtn = document.createElement('button');
+            allBtn.className = 'btn download-all-btn';
+            allBtn.textContent = 'Download All Files';
+            allBtn.addEventListener('click', async () => {
+                // Download each file sequentially
+                for (const [name, path] of Object.entries(files)) {
+                    const link = document.createElement('a');
+                    link.href = `${API_BASE_URL}/download/${path}`;
+                    link.download = path.split('/').pop();
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // Small delay between downloads
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            });
+            downloadLinks.appendChild(allBtn);
+        }
+    </script>
+</body>
+</html> 

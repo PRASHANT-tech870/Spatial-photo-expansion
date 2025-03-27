@@ -1,0 +1,12 @@
+transformers
+pillow
+numpy
+scipy
+opencv-python
+torch
+torchvision
+torchaudio
+fastapi
+python-multipart
+uvicorn
+gradio-client
