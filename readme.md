@@ -3,7 +3,7 @@
 This application converts regular 2D photos into spatial (3D) images compatible with devices that support HEVC spatial format, such as Apple Vision Pro. It also provides image outpainting capabilities to expand image boundaries.
 
 ## See it live running live at http://52.233.80.176:8002/ (hosted on azure cloud)
-
+## Demo video https://shorturl.at/dvO3O
 
 ## Table of Contents
 
